@@ -15,15 +15,15 @@ License: Artistic-2.0
 Depends:
   R (>= 3.4),
   devtools
-Imports: BiocStyle, knitr
 Suggests:
+  knitr,
   scone,
   zinbwave,
   clusterExperiment,
   slingshot,
   gam,
   BiocParallel,
-  doParallel
+  doParallel,
   BiocStyle,
   knitr,
   RColorBrewer,
