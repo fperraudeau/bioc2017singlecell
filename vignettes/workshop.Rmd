@@ -119,6 +119,7 @@ urls = c("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE95601&format=file&fi
          "https://raw.githubusercontent.com/rufletch/p63-HBC-diff/master/ref/oeHBCdiff_clusterLabels.txt")
          
 if(!file.exists(paste0(data_dir, "GSE95601_oeHBCdiff_Cufflinks_eSet.Rda"))) {
+  if (!dir.exists(data_dir)) system(sprintf('mkdir %s', data_dir))
   download.file(urls[1], paste0(data_dir, "GSE95601_oeHBCdiff_Cufflinks_eSet.Rda.gz"))
   R.utils::gunzip(paste0(data_dir, "GSE95601_oeHBCdiff_Cufflinks_eSet.Rda.gz"))
 }
