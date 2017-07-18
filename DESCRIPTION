@@ -14,9 +14,8 @@ Maintainer: Fanny Perraudeau <perraudeau.f@gmail.com>
 License: Artistic-2.0
 Depends:
   R (>= 3.4),
-  devtools
+  devtools,
 Suggests:
-  knitr,
   scone,
   zinbwave,
   clusterExperiment,
