@@ -1,5 +1,4 @@
 exportPattern("^[[:alpha:]]+")
 exportPattern("^[[:alpha:]]+")
-import(BiocStyle)
-import(knitr)
+
 

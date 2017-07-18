@@ -25,6 +25,7 @@ Suggests:
   doParallel,
   BiocStyle,
   knitr,
+  rmarkdown,
   RColorBrewer,
 Remotes:
   kstreet13/slingshot,
