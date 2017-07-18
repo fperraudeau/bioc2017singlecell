@@ -18,7 +18,7 @@ output:
 
 <!--
 %\VignetteEngine{knitr::rmarkdown}
-%\VignetteIndexEntry{bioc2017singlecell Vignette}
+%\VignetteIndexEntry{bioc2017singlecell}
 -->
 
 
