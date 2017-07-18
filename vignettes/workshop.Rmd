@@ -1,17 +1,7 @@
 ---
 title: "Bioconductor workflow for single-cell RNA sequencing: Normalization, dimensionality reduction, clustering, and lineage inference"
-author: 
-  - name: Fanny Perraudeau
-    affiliation: Graduate Group in Biostatistics, University of California, Berkeley, Berkeley, CA
-  - name: Davide Risso
-    affiliation: Division of Biostatistics and Epidemiology, Department of Healthcare Policy and Research, Weill Cornell Medicine, New York, NY
-  - name: Kelly Street
-    affilitation: Graduate Group in Biostatistics, University of California, Berkeley, Berkeley, CA
-  - name: Elizabeth Purdom
-    affiliation: Department of Statistics, University of California, Berkeley, Berkeley, CA
-  - name: Sandrine Dudoit
-    affiliation: Division of Biostatistics and Department of Statistics, University of California, Berkeley, Berkeley, CA
-   
+author: "Fanny Perraudeau, Davide Risso, Kelly Street, Elizabeth Purdom, Sandrine Dudoit"
+
 date: "`r Sys.Date()`" 
 
 abstract: Novel single-cell transcriptome sequencing assays allow researchers to measure gene expression levels at the resolution of single cells and offer the unprecendented opportunity to investigate at the molecular level fundamental biological questions such as stem cell differentiation or the discovery and characterization of rare cell types. However, such assays raise challenging statistical and computational questions and require the development of novel methodology and software. Using stem cell differentiation in the mouse olfactory epithelium as a case study, this integrated workflow provides a step-by-step tutorial to the methodology and associated software for the following four main tasks:(1) dimensionality reduction accounting for zero inflation and over-dispersion and adjusting for gene and cell-level covariates; (2) cell clustering using resampling-based sequential ensemble clustering; (3) inference of cell lineages and pseudotimes; and (4) differential expression analysis along lineages. 
@@ -22,7 +12,8 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 output: 
   BiocStyle::html_document:
-    toc: true
+    toc: yes
+    toc_float: yes
 ---
 
 <!--
@@ -93,11 +84,16 @@ set.seed(20)
 Note that in order to successfully run the workflow, we need the devel versions
 of the Bioconductor packages `scone (>=1.1.2)`, `zinbwave (>=0.99.6)`, and `clusterExperiment (>=1.3.2)`. We recommend running Bioconductor 3.6 (currently the devel version; see https://www.bioconductor.org/developers/how-to/useDevel/).
 
-## Parallel computating
 
-To give an idea to the users of the time needed to run the workflow, function `system.time` was used to report computation times for the time consuming functions. Computations were performed with 2 cores on a MacBook Pro (early 2015) with a 2.7 GHz Intel Core i5 processor and 8 GB of RAM. The `BiocParallel` package is used to allow for parallel computing in `zinbwave` function. Users with a different operating system may change the package used for parallel computing and the `NCORES` variable below.
+## Parallel computing
 
-```{r parallel}
+For the workshop, we run the workflow in serial mode and do not run the time consuming functions `zinbwave` and `RSEC`. When running the workflow from scratch, we recommend running the workflow in parallel. See chunks below.
+
+```{r}
+register(SerialParam())
+```
+
+```{r parallel,eval=FALSE}
 NCORES <- 2
 mysystem = Sys.info()[["sysname"]]
 if (mysystem == "Darwin"){
@@ -116,10 +112,12 @@ if (mysystem == "Darwin"){
 
 Counts for all genes in each cell were obtained from NCBI Gene Expression Omnibus (GEO), with accession number GSE95601. Before filtering, the dataset has 849 cells and 28,361 detected genes (i.e., genes with non-zero read counts). 
 
-Note that in the following, we assume that the user has access to a data folder located at `../data`. Users with a different directory structure may need to change the `data_dir` variable below to reproduce the workflow.
-
-```{r datain}
+```{r datadir}
 data_dir <- "../data/"
+```
+
+```{r datain,eval=FALSE}
+if (!dir.exists(data_dir)) system(sprintf('mkdir %s', data_dir))
 
 urls = c("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE95601&format=file&file=GSE95601%5FoeHBCdiff%5FCufflinks%5FeSet%2ERda%2Egz",
          "https://raw.githubusercontent.com/rufletch/p63-HBC-diff/master/ref/oeHBCdiff_clusterLabels.txt")
@@ -128,6 +126,10 @@ if(!file.exists(paste0(data_dir, "GSE95601_oeHBCdiff_Cufflinks_eSet.Rda"))) {
   if (!dir.exists(data_dir)) system(sprintf('mkdir %s', data_dir))
   download.file(urls[1], paste0(data_dir, "GSE95601_oeHBCdiff_Cufflinks_eSet.Rda.gz"))
   R.utils::gunzip(paste0(data_dir, "GSE95601_oeHBCdiff_Cufflinks_eSet.Rda.gz"))
+  assayData(Cufflinks_eSet)$exprs = NULL
+  assayData(Cufflinks_eSet)$fpkm_table = NULL
+  assayData(Cufflinks_eSet)$tpm_table = NULL
+  save(Cufflinks_eSet, file='data/GSE95601_oeHBCdiff_Cufflinks_eSet_reduced.Rda')
 }
 
 if(!file.exists(paste0(data_dir, "oeHBCdiff_clusterLabels.txt"))) {
@@ -136,7 +138,7 @@ if(!file.exists(paste0(data_dir, "oeHBCdiff_clusterLabels.txt"))) {
 ```
 
 ```{r}
-load(paste0(data_dir, "GSE95601_oeHBCdiff_Cufflinks_eSet.Rda"))
+load(paste0(data_dir, "GSE95601_oeHBCdiff_Cufflinks_eSet_reduced.Rda"))
 
 # Count matrix
 E <- assayData(Cufflinks_eSet)$counts_table
@@ -218,7 +220,7 @@ Finally, for computational efficiency, we retain only the 1,000 most variable ge
 vars <- rowVars(log1p(assay(se)))
 names(vars) <- rownames(se)
 vars <- sort(vars, decreasing = TRUE)
-core <- se[names(vars)[1:100],]
+core <- se[names(vars)[1:1000],]
 ```
 
 ## Dataset structure
@@ -269,10 +271,15 @@ knitr::include_graphics("zinb_schema.png")
 
 As with most dimensionality reduction methods, the user needs to specify the number of dimensions for the new low-dimensional space. Here, we use `K = 50` dimensions and adjust for batch effects via the matrix `X`. Note that if the users include more genes in the analysis, it may be preferable to reduce `K` to achieve a similar computational time.
 
-```{r zinb}
+```{r zinb,eval=FALSE}
 print(system.time(se <- zinbwave(core, K = 50, X = "~ Batch",  
                                  residuals = TRUE,
                                  normalizedValues = TRUE)))
+save(se, file = 'se_after_zinbwave.rda')
+```
+
+```{r}
+load(sprintf('%sse_after_zinbwave.rda', data_dir))
 ```
 
 ### Normalization
@@ -324,7 +331,7 @@ The next step of the workflow is to cluster the cells according to the low-dimen
 
 Note that the defaults in `RSEC` are designed for input data that are the actual (normalized) counts. Here, we are applying `RSEC` instead to the low-dimensional `W` matrix from ZINB-WaVE, for which we make a separate `SummarizedExperiment` object. For this reason, we choose to not use certain options in `RSEC`. In particular, we do not use the default dimensionality reduction step, since our input `W` is already in a space of reduced dimension. Specifically, `RSEC` offers a dimensionality reduction option for the input to both the clustering routines (`dimReduce`) and the construction of the hiearchy between the clusters (`dendroReduce`). We also skip the option to merge our clusters based on the amount of differential gene expression between clusters.
   
-```{r rsec_50}
+```{r rsec_50,eval=FALSE}
 seObj <- SummarizedExperiment(t(W), colData = colData(core))
 print(system.time(ceObj <- RSEC(seObj, k0s = 4:15, alphas = c(0.1),
                                 betas = 0.8, dimReduce="none",
@@ -338,6 +345,13 @@ print(system.time(ceObj <- RSEC(seObj, k0s = 4:15, alphas = c(0.1),
                                 combineProportion = 0.7,
                                 mergeMethod = "none", random.seed=424242,
                                 combineMinSize = 10)))
+save(seObj, file= 'seObj_after_RSEC.rda')
+save(ceObj, file= 'ceObj_after_RSEC.rda')
+```
+
+```{r}
+load(sprintf('%sceObj_after_RSEC.rda', data_dir))
+load(sprintf('%sseObj_after_RSEC.rda', data_dir))
 ```
 
 The resulting candidate clusterings can be visualized using the `plotClusters` function (Figure \@ref(fig:examineCombineMany)), where columns correspond to cells and rows to different clusterings. Each sample is color-coded based on its clustering for that row, where the colors have been chosen to try to match up clusters that show large overlap accross rows. The first row correspond to a consensus clustering across all candidate clusterings.
@@ -447,8 +461,7 @@ our_cl <- primaryClusterNamed(ceObj)
 cl <- our_cl[!our_cl %in% c("-1", "c4")]
 pal <- pal[!names(pal) %in% c("-1", "c4")]
 X <- W[!our_cl %in% c("-1", "c4"), ]
-mds <- cmdscale(dist(X), eig = TRUE, k = 4)
-X <- mds$points
+X <- cmdscale(dist(X), k = 4)
 
 lineages <- getLineages(X, clusterLabels = cl, start.clus = "c1")
 ```
@@ -528,31 +541,11 @@ This workflow provides a tutorial for the analysis of scRNA-seq data in R/Biocon
 
 # Software availability
 
-This section will be generated by the Editorial Office before publication. Authors are asked to provide some initial information to assist the Editorial Office, as detailed below.
-
-1. URL link to where the software can be downloaded from or used by a non-coder (AUTHOR TO PROVIDE; optional)
-2. URL link to the author's version control system repository containing the source code (AUTHOR TO PROVIDE; required)
-3. Link to source code as at time of publication (*F1000Research* TO GENERATE)
-4. Link to archived source code as at time of publication (*F1000Research* TO GENERATE)
-5. Software license (AUTHOR TO PROVIDE; required)
-
 The source code for this package can be found at https://github.com/fperraudeau/singlecellworkflow. The four packages used in the workflow (`scone`, `zinbwave`, `clusterExperiment`, and `slingshot`) are Bioconductor R packages and are available at, respectively, https://bioconductor.org/packages/scone, https://bioconductor.org/packages/zinbwave, https://bioconductor.org/packages/clusterExperiment, and https://github.com/kstreet13/slingshot. 
 
 ```{r}
 sessionInfo()
 ```
-
-# Author contributions
-
-FP, DR, KS, and EP performed the data analaysis and wrote the code portions of the workflow. FP and SD wrote the text portion of the workflow, with contributions from the other three authors. DR, EP, and SD supervised the research. 
-
-# Competing interests
-
-No competing interests were disclosed.
-
-# Grant information
-
-DR, KS, EP, and SD were supported by the National Institutes of Health BRAIN Initiative (U01 MH105979, PI: John Ngai). KS was supported by a training grant from the National Human Genome Research Institute (T32000047).
 
 # Acknowledgments
 
