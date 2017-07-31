@@ -11,3 +11,5 @@ The workshop is divided into five main parts:
 3. Cell clustering: [clusterExperiment](https://github.com/epurdom/clusterExperiment)
 4. Cell lineage and pseudotime inference: [slingshot](https://github.com/kstreet13/slingshot)
 5. Differential expression analysis along lineages
+
+A very similar version of the workflow is available at https://f1000research.com/articles/6-1158/v1
